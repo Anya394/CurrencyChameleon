@@ -6,45 +6,32 @@ namespace CurrencyChameleon
     internal class ExchangeRateService
     {
         private static readonly HttpClient _httpClient = new HttpClient();
-        private const string BaseUrl = "https://openexchangerates.org/api";
-
-        private static readonly string ApiKey;
-
-        static ExchangeRateService()
-        {
-            var builder = new ConfigurationBuilder().AddUserSecrets<Program>();
-            var configuration = builder.Build();
-
-            ApiKey = configuration["OpenExchangeRates:ApiKey"]
-                ?? throw new InvalidOperationException("OpenExchangeRates:ApiKey not found in secrets");
-        }
 
         public static async Task<string> GetExchangeRate(string currencyCode)
         {
             try
             {
-                var requestUrl = $"{BaseUrl}/latest.json?app_id={ApiKey}&base=USD";
+                var requestUrl = "https://www.cbr-xml-daily.ru/daily_json.js";
 
-                // Отправляем запрос к API
                 var response = await _httpClient.GetStringAsync(requestUrl);
 
                 using var jsonDocument = JsonDocument.Parse(response);
                 var root = jsonDocument.RootElement;
 
-                if (!root.TryGetProperty("rates", out var ratesElement))
-                {
-                    return "Ошибка: не удалось получить данные о курсах валют";
-                }
+                var dateStr = root.GetProperty("Date").GetString();
+                var updateDate = DateTime.Parse(dateStr);
 
-                // Получаем timestamp обновления данных
-                var timestamp = root.GetProperty("timestamp").GetInt64();
-                var updateDate = DateTimeOffset.FromUnixTimeSeconds(timestamp).DateTime;
+                var valute = root.GetProperty("Valute");
 
-                // Ищем запрошенную валюту
-                if (ratesElement.TryGetProperty(currencyCode, out var rateValue))
+                if (valute.TryGetProperty(currencyCode, out var currencyElement))
                 {
-                    var rate = rateValue.GetDecimal();
-                    return await FormatCurrencyResponse(currencyCode, rate, updateDate, "USD");
+                    var value = currencyElement.GetProperty("Value").GetDecimal();
+                    var nominal = currencyElement.GetProperty("Nominal").GetInt32();
+                    var name = currencyElement.GetProperty("Name").GetString();
+
+                    var ratePerOne = value / nominal;
+
+                    return await FormatCurrencyResponse(currencyCode, ratePerOne, updateDate, name);
                 }
 
                 return $"Валюта {currencyCode} не найдена. Убедитесь, что используете правильный код валюты (например, USD).";
@@ -63,60 +50,77 @@ namespace CurrencyChameleon
             }
         }
 
-        private static async Task<string> FormatCurrencyResponse(string currencyCode, decimal rate, DateTime updateDate, string baseCurrency = "USD")
+        private static async Task<string> FormatCurrencyResponse(string currencyCode, decimal rate, DateTime updateDate, string currencyName)
         {
             var currencySymbols = new Dictionary<string, string>
             {
                 {"USD", "💵"}, {"EUR", "💶"}, {"GBP", "💷"}, {"JPY", "💴"},
-                {"RUB", "🇷🇺"}, {"CNY", "🇨🇳"}, {"CHF", "🇨🇭"}, {"CAD", "🇨🇦"},
-                {"AUD", "🇦🇺"}, {"BTC", "₿"}, {"ETH", "Ξ"},
-                {"TRY", "🇹🇷"}, {"INR", "🇮🇳"}, {"BRL", "🇧🇷"}, {"MXN", "🇲🇽"},
+                {"CHF", "🇨🇭"}, {"CAD", "🇨🇦"}, {"AUD", "🇦🇺"}, {"CNY", "🇨🇳"},
+                {"RUB", "🇷🇺"}, {"TRY", "🇹🇷"}, {"INR", "🇮🇳"}, {"BRL", "🇧🇷"},
                 {"KRW", "🇰🇷"}, {"SGD", "🇸🇬"}, {"NZD", "🇳🇿"}, {"SEK", "🇸🇪"},
-                {"NOK", "🇳🇴"}, {"DKK", "🇩🇰"}, {"ZAR", "🇿🇦"}, {"HKD", "🇭🇰"}
+                {"NOK", "🇳🇴"}, {"DKK", "🇩🇰"}, {"ZAR", "🇿🇦"}, {"HKD", "🇭🇰"},
+                {"PLN", "🇵🇱"}, {"THB", "🇹🇭"}, {"UAH", "🇺🇦"}, {"KZT", "🇰🇿"},
+                {"BYN", "🇧🇾"}, {"AMD", "🇦🇲"}, {"AZN", "🇦🇿"}, {"GEL", "🇬🇪"}
             };
 
-            var symbol = currencySymbols.ContainsKey(currencyCode) ? currencySymbols[currencyCode] : "💱";
+            var symbol = currencySymbols.ContainsKey(currencyCode) ?
+                        currencySymbols[currencyCode] : "💱";
 
-            var baseSymbol = currencySymbols.ContainsKey(baseCurrency) ? currencySymbols[baseCurrency] : "💵";
+            var (usdToRub, eurToRub) = GetUsdAndEurRates().Result;
+
+            decimal toUsd = usdToRub > 0 ? rate / usdToRub : 0; // RUB/валюту ÷ RUB/USD = валюта/USD
+            decimal toEur = eurToRub > 0 ? rate / eurToRub : 0; // RUB/валюту ÷ RUB/EUR = валюта/EUR
 
             return $"""
-            {symbol} *Курс {currencyCode}*
+               {symbol} *{currencyCode} - {currencyName}*
     
-            • *1 {baseCurrency}* {baseSymbol} = *{rate:F4} {currencyCode}* {symbol}
-            • *1 {currencyCode}* {symbol} = *{(1 / rate):F4} {baseCurrency}* {baseSymbol}
+                💰 *Официальный курс ЦБ РФ:*
+                • *1 {currencyCode}* = *{rate:F2} RUB* 🇷🇺
+                • *1 RUB* 🇷🇺 = *{(1 / rate):F4} {currencyCode}*
     
-            📊 *Относительно основных валют:*
-            🇺🇸 USD: {rate:F4}
-            🇪🇺 EUR: {await GetConvertedRate(currencyCode, "EUR"):F4}
-            🇬🇧 GBP: {await GetConvertedRate(currencyCode, "GBP"):F4}
-            🇨🇭 CHF: {await GetConvertedRate(currencyCode, "CHF"):F4}
+                💱 *Конвертация в другие валюты:*
+                🇺🇸 *1 {currencyCode}* = *{toUsd:F4} USD* 💵
+                🇪🇺 *1 {currencyCode}* = *{toEur:F4} EUR* 💶
     
-            ⏰ *Обновлено:* {updateDate:dd.MM.yyyy HH:mm}
-            📍 *Источник:* Open Exchange Rates
-            🔄 *Базовая валюта:* {baseCurrency}
+                ⏰ *Обновлено:* {updateDate:dd.MM.yyyy}
+                🏛 *Источник:* Центральный банк РФ
+                📍 *Официальные курсы валют*
             """;
         }
 
-        public static async Task<decimal> GetConvertedRate(string fromCurrency, string toCurrency, decimal amount = 1)
+        private static async Task<(decimal usdRate, decimal eurRate)> GetUsdAndEurRates()
         {
             try
             {
-                var requestUrl = $"{BaseUrl}/convert/{amount}/{fromCurrency}/{toCurrency}?app_id={ApiKey}";
+                var requestUrl = "https://www.cbr-xml-daily.ru/daily_json.js";
+                using var httpClient = new HttpClient();
+                var response = await httpClient.GetStringAsync(requestUrl);
 
-                var response = await _httpClient.GetStringAsync(requestUrl);
                 using var jsonDocument = JsonDocument.Parse(response);
+                var valute = jsonDocument.RootElement.GetProperty("Valute");
 
-                var responseElement = jsonDocument.RootElement;
-                if (responseElement.TryGetProperty("response", out var responseValue))
+                decimal usdRate = 0;
+                decimal eurRate = 0;
+
+                if (valute.TryGetProperty("USD", out var usdElement))
                 {
-                    return responseValue.GetDecimal();
+                    var value = usdElement.GetProperty("Value").GetDecimal();
+                    var nominal = usdElement.GetProperty("Nominal").GetInt32();
+                    usdRate = value / nominal;
                 }
 
-                throw new Exception("Не удалось получить данные конвертации");
+                if (valute.TryGetProperty("EUR", out var eurElement))
+                {
+                    var value = eurElement.GetProperty("Value").GetDecimal();
+                    var nominal = eurElement.GetProperty("Nominal").GetInt32();
+                    eurRate = value / nominal;
+                }
+
+                return (usdRate, eurRate);
             }
-            catch (Exception)
+            catch
             {
-                return 0;
+                return (0, 0);
             }
         }
     }
