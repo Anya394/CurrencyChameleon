@@ -1,6 +1,7 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using Telegram.Bot.Exceptions;
 
 namespace CurrencyChameleon
 {
@@ -13,34 +14,35 @@ namespace CurrencyChameleon
 
         public async Task WithCurrencyKeyboard(string text = "Используйте кнопки ниже для выбора валюты:")
         {
-            await _botClient.EditMessageTextAsync(
-                chatId: _chatId,
-                messageId: _messageId,
-                text: text,
-                parseMode: ParseMode.Markdown,
-                replyMarkup: Keyboards.GetCurrencyKeyboard(),
-                cancellationToken: _cancellationToken);
+            await SafeEditMessage(text, Keyboards.GetCurrencyKeyboard());
         }
 
         public async Task WithKeyboard(string text, InlineKeyboardMarkup replyMarkup)
         {
-            await _botClient.EditMessageTextAsync(
-                chatId: _chatId,
-                messageId: _messageId,
-                text: text,
-                parseMode: ParseMode.Markdown,
-                replyMarkup: replyMarkup,
-                cancellationToken: _cancellationToken);
+            await SafeEditMessage(text, replyMarkup);
         }
 
         public async Task WithTextOnly(string text)
         {
-            await _botClient.EditMessageTextAsync(
-                chatId: _chatId,
-                messageId: _messageId,
-                text: text,
-                parseMode: ParseMode.Markdown,
-                cancellationToken: _cancellationToken);
+            await SafeEditMessage(text, null);
+        }
+
+        private async Task SafeEditMessage(string text, InlineKeyboardMarkup? replyMarkup)
+        {
+            try
+            {
+                await _botClient.EditMessageTextAsync(
+                    chatId: _chatId,
+                    messageId: _messageId,
+                    text: text,
+                    parseMode: ParseMode.Markdown,
+                    replyMarkup: replyMarkup,
+                    cancellationToken: _cancellationToken);
+            }
+            catch (ApiRequestException ex) when (ex.ErrorCode == 400 && ex.Message.Contains("message is not modified"))
+            {
+                Console.WriteLine($"Message not modified (chatId: {_chatId}, messageId: {_messageId})");
+            }
         }
     }
 }
