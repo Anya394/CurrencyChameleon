@@ -20,7 +20,8 @@ namespace CurrencyChameleon
             return $"Валюта {currencyCode} не найдена. Убедитесь, что используете правильный код валюты (например, USD).";
         }
 
-        private static string FormatCurrencyResponse(string currencyCode, decimal rate, DateTime updateDate, string currencyName)
+        private static string FormatCurrencyResponse(string currencyCode, decimal rate, DateTime updateDate,
+            string currencyName)
         {
             var currencySymbols = new Dictionary<string, string>
             {
@@ -66,7 +67,8 @@ namespace CurrencyChameleon
             return (usdData?.rate ?? 0, eurData?.rate ?? 0);
         }
 
-        private static async Task<(decimal rate, string name, DateTime updateDate)?> GetCurrencyRateAsync(string currencyCode)
+        private static async Task<(decimal rate, string name, DateTime updateDate)?> GetCurrencyRateAsync(
+            string currencyCode)
         {
             try
             {

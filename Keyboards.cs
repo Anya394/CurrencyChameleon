@@ -31,6 +31,9 @@ namespace CurrencyChameleon
                 ],
                 [
                     InlineKeyboardButton.WithCallbackData("💎 Еще валюты", "currencies_more")
+                ],
+                [
+                    InlineKeyboardButton.WithCallbackData("В начало", "go_main_menu")
                 ]
             };
 
@@ -39,10 +42,18 @@ namespace CurrencyChameleon
 
         public static InlineKeyboardMarkup GetInputCancelKeyboard()
         {
-            return new InlineKeyboardMarkup(new[]
-            {
-                new[] { InlineKeyboardButton.WithCallbackData("Отмена", "cancel_input") }
-            });
+            return new InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton.WithCallbackData("Отмена", "cancel_input")]
+            ]);
+        }
+
+        public static InlineKeyboardMarkup GetStartKeyboard()
+        {
+            return new InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton.WithCallbackData("👀 Узнать курс", "find_out_course_input")]
+            ]);
         }
     }
 }
