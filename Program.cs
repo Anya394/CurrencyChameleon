@@ -180,6 +180,7 @@ namespace CurrencyChameleon
             var callbackData = callbackQuery.Data;
             var chatId = callbackQuery.Message!.Chat.Id;
             var messageId = callbackQuery.Message.MessageId;
+            var editor = new MessageEditor(botClient, chatId, messageId, cancellationToken);
 
             if (callbackData!.StartsWith("currency_"))
             {
@@ -192,14 +193,7 @@ namespace CurrencyChameleon
                     cancellationToken: cancellationToken);
 
                 var exchangeRate = await ExchangeRateService.GetExchangeRate(currencyCode);
-
-                await botClient.EditMessageTextAsync(
-                    chatId: chatId,
-                    messageId: messageId,
-                    text: exchangeRate,
-                    parseMode: ParseMode.Markdown,
-                    replyMarkup: Keyboards.GetCurrencyKeyboard(), // Оставляем клавиатуру для повторного выбора
-                    cancellationToken: cancellationToken);
+                await editor.WithCurrencyKeyboard(exchangeRate);
             }
 
             if (callbackData.Equals("currencies_more"))
@@ -218,43 +212,22 @@ namespace CurrencyChameleon
 
             if (callbackData.Equals("find_out_course_input"))
             {
-                await botClient.EditMessageTextAsync(
-                    chatId: chatId,
-                    messageId: messageId,
-                    text: "Используйте кнопки ниже для выбора валюты:",
-                    parseMode: ParseMode.Markdown,
-                    replyMarkup: Keyboards.GetCurrencyKeyboard(),
-                    cancellationToken: cancellationToken);
+                await editor.WithCurrencyKeyboard();
             }
 
             if (callbackData.Equals("go_main_menu"))
             {
-                await botClient.EditMessageTextAsync(
-                    chatId: chatId,
-                    messageId: messageId,
-                    text: "Добро пожаловать! Узнавайте курсы любых валют в любое время.:",
-                    parseMode: ParseMode.Markdown,
-                    replyMarkup: Keyboards.GetStartKeyboard(),
-                    cancellationToken: cancellationToken);
+                var text = "Добро пожаловать! Узнавайте курсы любых валют в любое время.:";
+                await editor.WithKeyboard(text, Keyboards.GetStartKeyboard());
             }
         }
 
         // Обработка выбора ввода кастомного кода валюты
         private static async Task HandleCustomCurrencyInput(ITelegramBotClient botClient, CallbackQuery callbackQuery, CancellationToken cancellationToken)
         {
-            var chatId = callbackQuery.Message.Chat.Id;
-            var messageId = callbackQuery.Message.MessageId;
-
-            var cancelKeyboard = Keyboards.GetInputCancelKeyboard();
-
-            // Обновляем сообщение с инструкцией
-            await botClient.EditMessageTextAsync(
-                chatId: chatId,
-                messageId: messageId,
-                text: "💎 *Отправьте код валюты в чат*",
-                parseMode: ParseMode.Markdown,
-                replyMarkup: cancelKeyboard,
-                cancellationToken: cancellationToken);
+            var message = callbackQuery.Message;
+            var editor = new MessageEditor(botClient, message!.Chat.Id, message.MessageId, cancellationToken);
+            await editor.WithKeyboard("💎 *Отправьте код валюты в чат*", Keyboards.GetInputCancelKeyboard());
         }
 
         // Обработка введённого кода валюты
@@ -292,19 +265,13 @@ namespace CurrencyChameleon
         // Обработка отмены ввода
         private static async Task HandleCancelInput(ITelegramBotClient botClient, CallbackQuery callbackQuery, CancellationToken cancellationToken)
         {
-            var chatId = callbackQuery.Message.Chat.Id;
+            var chatId = callbackQuery.Message!.Chat.Id;
             var messageId = callbackQuery.Message.MessageId;
+            var editor = new MessageEditor(botClient, chatId, messageId, cancellationToken);
 
             _userStates.Remove(chatId);
 
-            // Возвращаем основное меню
-            await botClient.EditMessageTextAsync(
-                chatId: chatId,
-                messageId: messageId,
-                text: "Используйте кнопки ниже для выбора валюты:",
-                parseMode: ParseMode.Markdown,
-                replyMarkup: Keyboards.GetCurrencyKeyboard(),
-                cancellationToken: cancellationToken);
+            await editor.WithCurrencyKeyboard();
 
             await botClient.AnswerCallbackQueryAsync(
                 callbackQueryId: callbackQuery.Id,
