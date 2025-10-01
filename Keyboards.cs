@@ -22,7 +22,7 @@ namespace CurrencyChameleon
                 [
                     InlineKeyboardButton.WithCallbackData("🇦🇺 AUD", "currency_aud"),
                     InlineKeyboardButton.WithCallbackData("🇨🇳 CNY", "currency_cny"),
-                    InlineKeyboardButton.WithCallbackData("🇷🇺 RUB", "currency_rub")
+                    InlineKeyboardButton.WithCallbackData("🇨🇿 CZK", "currency_czk")
                 ],
                 [
                     InlineKeyboardButton.WithCallbackData("🇹🇷 TRY", "currency_try"),
