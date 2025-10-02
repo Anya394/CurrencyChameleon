@@ -38,10 +38,20 @@ namespace CurrencyChameleon
                     parseMode: ParseMode.Markdown,
                     replyMarkup: replyMarkup,
                     cancellationToken: _cancellationToken);
+
+                FileLogger.Info($"Message edited - " +
+                    $"Chat: {_chatId}, " +
+                    $"Message: {_messageId}, " +
+                    $"Text: {text.Substring(0, Math.Min(50, text.Length))}...");
             }
             catch (ApiRequestException ex) when (ex.ErrorCode == 400 && ex.Message.Contains("message is not modified"))
             {
                 Console.WriteLine($"Message not modified (chatId: {_chatId}, messageId: {_messageId})");
+                FileLogger.Debug($"Message not modified - Chat: {_chatId}, Message: {_messageId}");
+            }
+            catch (Exception ex)
+            {
+                FileLogger.Error($"Failed to edit message - Chat: {_chatId}, Message: {_messageId}", ex);
             }
         }
     }

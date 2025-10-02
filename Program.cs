@@ -32,6 +32,8 @@ namespace CurrencyChameleon
 
         public static async Task Main()
         {
+            FileLogger.Info("Bot starting...");
+
             _botClient = new TelegramBotClient(TelegramBotToken);
 
             // Настройки получения обновлений
@@ -46,20 +48,20 @@ namespace CurrencyChameleon
 
             // Создаем экземпляр обработчика
             var updateHandler = new DefaultUpdateHandler(HandleUpdateAsync, HandlePollingErrorAsync);
-
             _botClient.StartReceiving(
                 updateHandler: updateHandler,
                 receiverOptions: receiverOptions,
                 cancellationToken: cts.Token
             );
 
-            // Получаем информацию о боте и выводим ее в консоль
             var me = await _botClient.GetMeAsync();
+            FileLogger.Info($"Bot @{me.Username} started successfully!");
             Console.WriteLine($"Бот @{me.Username} запущен и ожидает сообщений!");
             Console.ReadLine(); // Бесконечно ждем, чтобы бот не закрылся
 
             // Отправляем сигнал отмены для остановки получения обновлений
             cts.Cancel();
+            FileLogger.Info("Bot stopped");
         }
 
         private static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -76,9 +78,12 @@ namespace CurrencyChameleon
                 return;
 
             var chatId = message.Chat.Id;
-            var userName = message.From?.FirstName ?? "Пользователь";
+            var userFirstName = message.From?.FirstName ?? "Пользователь";
+            var userName = message.From?.Username;
 
-            Console.WriteLine($"{userName} ({chatId}) написал: '{messageText}'");
+            Console.WriteLine($"{userFirstName} ({chatId}) написал: '{messageText}'");
+            FileLogger.Info($"Received message - User: {userFirstName} ({chatId}), Text: {messageText}");
+            FileLogger.UserInfo($"@{userName} написал: '{messageText}'");
 
             // Проверяем, ожидаем ли мы ввод кода валюты от пользователя
             if (_userStates.ContainsKey(chatId) && _userStates[chatId] == UserState.AwaitingCurrencyCode)
@@ -90,7 +95,8 @@ namespace CurrencyChameleon
             await ProcessMessage(botClient, chatId, messageText, cancellationToken);
         }
 
-        private static Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+        private static Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception,
+            CancellationToken cancellationToken)
         {
             // Обрабатываем ошибки API Telegram
             var ErrorMessage = exception switch
@@ -101,6 +107,7 @@ namespace CurrencyChameleon
             };
 
             Console.WriteLine(ErrorMessage);
+            FileLogger.Error("Telegram polling error", exception);
             return Task.CompletedTask;
         }
 
@@ -182,9 +189,15 @@ namespace CurrencyChameleon
             var messageId = callbackQuery.Message.MessageId;
             var editor = new MessageEditor(botClient, chatId, messageId, cancellationToken);
 
+            //FileLogger.Info($"Callback received - Chat: {chatId}, Callback: {callbackData}");
+
             if (callbackData!.StartsWith("currency_"))
             {
                 var currencyCode = callbackData.Split('_')[1].ToUpper();
+
+                var userName = callbackQuery.Message!.Chat.Username;
+                FileLogger.Info($"Currency selected - Code: {currencyCode}");
+                FileLogger.UserInfo($"@{userName} выбрал валюту {currencyCode}");
 
                 // Показываем индикатор загрузки
                 await botClient.AnswerCallbackQueryAsync(
